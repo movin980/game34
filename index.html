@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Multiplayer Tic Tac Toe</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #f5f5f5;
+      padding: 30px;
+    }
+    h1 { color: #333; }
+    #setup { margin-bottom: 20px; }
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      margin: 5px;
+      border-radius: 5px;
+    }
+    button { cursor: pointer; }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px);
+      gap: 5px;
+      justify-content: center;
+      margin: 20px auto;
+      display: none;
+    }
+    .cell {
+      background: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 40px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 8px;
+      box-shadow: 0px 0px 5px rgba(0,0,0,0.2);
+    }
+    .cell.taken { cursor: not-allowed; }
+    #status { margin-top: 15px; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h1>🎲 Multiplayer Tic Tac Toe</h1>
+
+  <div id="setup">
+    <input type="text" id="room" placeholder="Room Code" />
+    <button onclick="joinRoom()">Join Room</button>
+  </div>
+
+  <div id="game">
+    <h2>You are <span id="playerSymbol"></span></h2>
+    <div id="board"></div>
+    <p id="status"></p>
+  </div>
+
+  <!-- Firebase Modular SDK (v9+) -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-analytics.js";
+    import { getDatabase, ref, set, onValue, get, update } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+    // 🔹 Your Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyAS_w7NHy2QWjzv5j6rsf9Txpx576DrCok",
+      authDomain: "game-88b66.firebaseapp.com",
+      databaseURL: "https://game-88b66-default-rtdb.firebaseio.com", // ✅ Added
+      projectId: "game-88b66",
+      storageBucket: "game-88b66.firebasestorage.app",
+      messagingSenderId: "19207033637",
+      appId: "1:19207033637:web:c7faedace198509b4a80cc",
+      measurementId: "G-R0W7NT1P4R"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const db = getDatabase(app);
+
+    let roomCode, playerSymbol, myTurn;
+
+    const boardEl = document.getElementById("board");
+    for (let i = 0; i < 9; i++) {
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.dataset.index = i;
+      cell.onclick = () => makeMove(i);
+      boardEl.appendChild(cell);
+    }
+
+    window.joinRoom = async function() {
+      roomCode = document.getElementById("room").value.trim();
+      if (!roomCode) return alert("Enter a room code!");
+
+      const roomRef = ref(db, "rooms/" + roomCode);
+
+      const snapshot = await get(roomRef);
+      if (!snapshot.exists()) {
+        // Create new room, assign X
+        playerSymbol = "X";
+        myTurn = true;
+        await set(roomRef, {
+          board: Array(9).fill(""),
+          turn: "X",
+          players: { X: true }
+        });
+      } else {
+        const data = snapshot.val();
+        if (data.players && data.players.O) {
+          alert("Room full!");
+          return;
+        }
+        playerSymbol = "O";
+        myTurn = false;
+        await update(roomRef, { "players/O": true });
+      }
+
+      document.getElementById("playerSymbol").textContent = playerSymbol;
+      document.getElementById("setup").style.display = "none";
+      document.getElementById("game").style.display = "block";
+      boardEl.style.display = "grid";
+
+      listenForUpdates(roomRef);
+    }
+
+    function listenForUpdates(roomRef) {
+      onValue(roomRef, (snapshot) => {
+        const data = snapshot.val();
+        if (!data) return;
+
+        // Update board UI
+        document.querySelectorAll(".cell").forEach((cell, i) => {
+          cell.textContent = data.board[i];
+          cell.classList.toggle("taken", data.board[i] !== "");
+        });
+
+        // Status
+        if (checkWinner(data.board)) {
+          document.getElementById("status").textContent = `${checkWinner(data.board)} Wins!`;
+          myTurn = false;
+        } else if (!data.board.includes("")) {
+          document.getElementById("status").textContent = "Draw!";
+        } else {
+          document.getElementById("status").textContent =
+            data.turn === playerSymbol ? "Your turn" : "Opponent's turn";
+          myTurn = (data.turn === playerSymbol);
+        }
+      });
+    }
+
+    async function makeMove(index) {
+      if (!myTurn) return;
+      const cellRef = ref(db, "rooms/" + roomCode + "/board/" + index);
+      const snapshot = await get(cellRef);
+      if (snapshot.val() === "") {
+        await set(cellRef, playerSymbol);
+        await set(ref(db, "rooms/" + roomCode + "/turn"), playerSymbol === "X" ? "O" : "X");
+      }
+    }
+
+    function checkWinner(board) {
+      const wins = [
+        [0,1,2],[3,4,5],[6,7,8], // rows
+        [0,3,6],[1,4,7],[2,5,8], // cols
+        [0,4,8],[2,4,6]          // diagonals
+      ];
+      for (let combo of wins) {
+        const [a, b, c] = combo;
+        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+          return board[a];
+        }
+      }
+      return null;
+    }
+  </script>
+</body>
+</html>
