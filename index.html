@@ -8,11 +8,14 @@
 :root{--bg:#0f1724;--accent:#38bdf8;--muted:#94a3b8}
 html,body{margin:0;height:100%;font-family:sans-serif;background:var(--bg);color:#fff;}
 .wrap{max-width:900px;margin:20px auto;padding:20px;background:#081126;border-radius:12px;}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-canvas{display:block;margin:0 auto;background:#031423;border-radius:8px;}
-button{padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:var(--accent);color:#042939;margin-left:5px;}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+canvas{display:block;margin:0 auto;background:#031423;border-radius:8px;touch-action:none;}
+button{padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:var(--accent);color:#042939;margin:5px;}
 #leaderboard{margin-top:15px;background:#0b1a2c;padding:10px;border-radius:8px;}
 #leaderboard ol{padding-left:20px;}
+/* Mobile controls */
+#controls{display:flex;justify-content:center;margin-top:10px;gap:10px;}
+#controls button{flex:1;padding:20px;font-size:24px;border-radius:12px;background:var(--accent);color:#042939;border:none;}
 </style>
 </head>
 <body>
@@ -29,6 +32,12 @@ button{padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:
     </div>
   </header>
   <canvas id="game" width="800" height="500"></canvas>
+  <!-- Mobile Controls -->
+  <div id="controls">
+    <button id="leftBtn">◀️</button>
+    <button id="launchBtn">⏺️</button>
+    <button id="rightBtn">▶️</button>
+  </div>
   <div id="leaderboard">
     <h2>Leaderboard</h2>
     <ol id="leaderList"></ol>
@@ -49,17 +58,15 @@ const firebaseConfig = {
   appId: "1:1061146100490:web:37cf28ebae47d59418b0f3",
   measurementId: "G-41KLVN1P8L"
 };
-
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// ----- Firebase Leaderboard Functions -----
+// ----- Firebase Leaderboard -----
 async function saveScore(name, score) {
   const scoresRef = ref(db, 'scores');
   const newScoreRef = push(scoresRef);
   await set(newScoreRef, { name, score, timestamp: Date.now() });
 }
-
 async function getTopScores() {
   const scoresRef = ref(db, 'scores');
   const topScoresQuery = query(scoresRef, orderByChild('score'), limitToLast(5));
@@ -71,7 +78,6 @@ async function getTopScores() {
   }
   return scores;
 }
-
 async function updateLeaderboardDisplay() {
   const scores = await getTopScores();
   const list = document.getElementById('leaderList');
@@ -89,14 +95,13 @@ const ctx = canvas.getContext('2d');
 const scoreEl = document.getElementById('score');
 const livesEl = document.getElementById('lives');
 const levelEl = document.getElementById('level');
-
 const W = canvas.width, H = canvas.height;
-let state = {running:false, paused:false, score:0, lives:3, level:1, bricks:[], balls:[], paddle:null};
+let state = {running:false, score:0, lives:3, level:1, bricks:[], balls:[], paddle:null};
+const varAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent');
 
 // ----- Classes -----
 class Paddle {
   constructor(){ this.w=120; this.h=14; this.x=(W-120)/2; this.y=H-40; this.speed=7; this.vx=0; this.color=varAccent; }
-  move(dir){ this.vx=dir*this.speed; }
   update(){ this.x+=this.vx; if(this.x<0)this.x=0; if(this.x+this.w>W)this.x=W-this.w; }
   draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,this.w,this.h); }
 }
@@ -136,7 +141,6 @@ function buildLevel(level){
   }
   return bricks;
 }
-
 function resetBoard(full=false){
   state.paddle=new Paddle();
   state.balls=[new Ball(W/2,state.paddle.y-16,Math.random()*4-2,-4)];
@@ -145,9 +149,7 @@ function resetBoard(full=false){
   state.bricks=buildLevel(state.level);
   updateHUD();
 }
-
 function updateHUD(){ scoreEl.textContent=state.score; livesEl.textContent=state.lives; levelEl.textContent=state.level; }
-
 function rectCircleCollide(rect,circle){
   const dx=Math.max(rect.x,Math.min(circle.x,rect.x+rect.w));
   const dy=Math.max(rect.y,Math.min(circle.y,rect.y+rect.h));
@@ -159,19 +161,13 @@ function step(){
   if(!state.running)return;
   state.paddle.update();
   for(const b of state.balls)b.update();
-
-  // Ball-Paddle collision
   for(const b of state.balls){
     if(rectCircleCollide(state.paddle,b)){ b.dy=-Math.abs(b.dy); b.sticky=false; }
   }
-
-  // Ball-Brick collision
   state.bricks.forEach(br=>state.balls.forEach(b=>{
     if(rectCircleCollide(br,b)){ br.hit(); b.dy*=-1; state.score+=10; }
   }));
   state.bricks=state.bricks.filter(br=>br.hp>0);
-
-  // Ball lost
   state.balls=state.balls.filter(b=>b.y-b.r<H);
   if(state.balls.length===0){
     state.lives--; 
@@ -179,20 +175,16 @@ function step(){
     state.balls=[new Ball(W/2,state.paddle.y-16,Math.random()*4-2,-4)];
     state.balls[0].sticky=true;
   }
-
-  // Level up
   if(state.bricks.length===0){
     state.level++;
     state.bricks=buildLevel(state.level);
     state.balls=[new Ball(W/2,state.paddle.y-16,Math.random()*4-2,-4)];
     state.balls[0].sticky=true;
   }
-
   render();
   updateHUD();
   requestAnimationFrame(step);
 }
-
 function render(){
   ctx.clearRect(0,0,W,H);
   state.bricks.forEach(br=>br.draw());
@@ -216,7 +208,7 @@ async function gameOver(){
   }
 }
 
-// ----- Controls -----
+// ----- Keyboard Controls -----
 document.addEventListener("keydown", e=>{
   if(e.key==="ArrowLeft"||e.key==="a") state.paddle.vx=-state.paddle.speed;
   if(e.key==="ArrowRight"||e.key==="d") state.paddle.vx=state.paddle.speed;
@@ -226,12 +218,22 @@ document.addEventListener("keyup", e=>{
   if(e.key==="ArrowLeft"||e.key==="a"||e.key==="ArrowRight"||e.key==="d") state.paddle.vx=0;
 });
 
+// ----- Mobile Touch Controls -----
+const leftBtn=document.getElementById("leftBtn");
+const rightBtn=document.getElementById("rightBtn");
+const launchBtn=document.getElementById("launchBtn");
+
+leftBtn.addEventListener("touchstart", ()=> state.paddle.vx=-state.paddle.speed);
+leftBtn.addEventListener("touchend", ()=> state.paddle.vx=0);
+rightBtn.addEventListener("touchstart", ()=> state.paddle.vx=state.paddle.speed);
+rightBtn.addEventListener("touchend", ()=> state.paddle.vx=0);
+launchBtn.addEventListener("touchstart", ()=> state.balls.forEach(b=>b.sticky=false));
+
 // ----- Buttons -----
 document.getElementById("start").addEventListener("click", ()=>{ if(!state.running){ state.running=true; requestAnimationFrame(step); } });
 document.getElementById("restart").addEventListener("click", ()=>{ resetBoard(true); state.running=true; requestAnimationFrame(step); });
 
 // ----- Initialize -----
-const varAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent');
 resetBoard(true);
 updateLeaderboardDisplay();
 </script>
