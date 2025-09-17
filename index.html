@@ -3,19 +3,72 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Block Bust with Firebase Leaderboard</title>
+<title>Block Bust - Responsive</title>
 <style>
-:root{--bg:#0f1724;--accent:#38bdf8;--muted:#94a3b8}
-html,body{margin:0;height:100%;font-family:sans-serif;background:var(--bg);color:#fff;}
-.wrap{max-width:900px;margin:20px auto;padding:20px;background:#081126;border-radius:12px;}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
-canvas{display:block;margin:0 auto;background:#031423;border-radius:8px;touch-action:none;}
-button{padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:var(--accent);color:#042939;margin:5px;}
-#leaderboard{margin-top:15px;background:#0b1a2c;padding:10px;border-radius:8px;}
-#leaderboard ol{padding-left:20px;}
-/* Mobile controls */
-#controls{display:flex;justify-content:center;margin-top:10px;gap:10px;}
-#controls button{flex:1;padding:20px;font-size:24px;border-radius:12px;background:var(--accent);color:#042939;border:none;}
+:root {
+  --bg: #0f1724;
+  --accent: #38bdf8;
+  --muted: #94a3b8;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: #fff;
+  font-family: sans-serif;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+canvas {
+  width: 100%;
+  height: auto;
+  background: #031423;
+  border-radius: 8px;
+  display: block;
+  touch-action: none;
+}
+
+button {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  background: var(--accent);
+  color: #042939;
+  margin-left: 5px;
+}
+
+#leaderboard {
+  width: 100%;
+  margin-top: 10px;
+  background: #0b1a2c;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+#leaderboard ol {
+  padding-left: 20px;
+}
 </style>
 </head>
 <body>
@@ -31,211 +84,251 @@ button{padding:8px 12px;border-radius:6px;border:none;cursor:pointer;background:
       <button id="restart">Restart</button>
     </div>
   </header>
-  <canvas id="game" width="800" height="500"></canvas>
-  <!-- Mobile Controls -->
-  <div id="controls">
-    <button id="leftBtn">◀️</button>
-    <button id="launchBtn">⏺️</button>
-    <button id="rightBtn">▶️</button>
-  </div>
+
+  <canvas id="game"></canvas>
+
   <div id="leaderboard">
     <h2>Leaderboard</h2>
     <ol id="leaderList"></ol>
   </div>
 </div>
 
-<script type="module">
-// ----- Firebase Setup -----
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.3.1/firebase-app.js";
-import { getDatabase, ref, push, set, get, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/10.3.1/firebase-database.js";
+<script>
+// ===== Responsive Canvas Setup =====
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-const firebaseConfig = {
-  apiKey: "AIzaSyD8GjErV4ABo6U21bwabszwuwxAfcLNvHg",
-  authDomain: "game-34-d1383.firebaseapp.com",
-  projectId: "game-34-d1383",
-  storageBucket: "game-34-d1383.appspot.com",
-  messagingSenderId: "1061146100490",
-  appId: "1:1061146100490:web:37cf28ebae47d59418b0f3",
-  measurementId: "G-41KLVN1P8L"
+// Base resolution (design space)
+const baseWidth = 800;
+const baseHeight = 500;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth * 0.95;
+  canvas.height = window.innerHeight * 0.6;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+function scaleX(x) { return x * canvas.width / baseWidth; }
+function scaleY(y) { return y * canvas.height / baseHeight; }
+
+// ===== Game State =====
+let state = {
+  running: false,
+  score: 0,
+  lives: 3,
+  level: 1,
+  bricks: [],
+  balls: [],
+  paddle: null
 };
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
 
-// ----- Firebase Leaderboard -----
-async function saveScore(name, score) {
-  const scoresRef = ref(db, 'scores');
-  const newScoreRef = push(scoresRef);
-  await set(newScoreRef, { name, score, timestamp: Date.now() });
-}
-async function getTopScores() {
-  const scoresRef = ref(db, 'scores');
-  const topScoresQuery = query(scoresRef, orderByChild('score'), limitToLast(5));
-  const snapshot = await get(topScoresQuery);
-  const scores = [];
-  if(snapshot.exists()){
-    snapshot.forEach(childSnap => scores.push(childSnap.val()));
-    scores.sort((a,b)=>b.score - a.score);
-  }
-  return scores;
-}
-async function updateLeaderboardDisplay() {
-  const scores = await getTopScores();
-  const list = document.getElementById('leaderList');
-  list.innerHTML = '';
-  scores.forEach(s => {
-    const li = document.createElement('li');
-    li.textContent = `${s.name}: ${s.score}`;
-    list.appendChild(li);
-  });
-}
+const scoreEl = document.getElementById("score");
+const livesEl = document.getElementById("lives");
+const levelEl = document.getElementById("level");
 
-// ----- Game Setup -----
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const scoreEl = document.getElementById('score');
-const livesEl = document.getElementById('lives');
-const levelEl = document.getElementById('level');
-const W = canvas.width, H = canvas.height;
-let state = {running:false, score:0, lives:3, level:1, bricks:[], balls:[], paddle:null};
-const varAccent = getComputedStyle(document.documentElement).getPropertyValue('--accent');
-
-// ----- Classes -----
+// ===== Classes =====
 class Paddle {
-  constructor(){ this.w=120; this.h=14; this.x=(W-120)/2; this.y=H-40; this.speed=7; this.vx=0; this.color=varAccent; }
-  update(){ this.x+=this.vx; if(this.x<0)this.x=0; if(this.x+this.w>W)this.x=W-this.w; }
-  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,this.w,this.h); }
-}
-class Ball {
-  constructor(x,y,dx,dy){ this.r=8; this.x=x; this.y=y; this.dx=dx; this.dy=dy; this.sticky=true; }
-  update(){
-    if(this.sticky){ this.x=state.paddle.x+state.paddle.w/2; this.y=state.paddle.y-16; return; }
-    this.x+=this.dx; this.y+=this.dy;
-    if(this.x-this.r<0){ this.x=this.r; this.dx*=-1; }
-    if(this.x+this.r>W){ this.x=W-this.r; this.dx*=-1; }
-    if(this.y-this.r<0){ this.y=this.r; this.dy*=-1; }
+  constructor() {
+    this.w = 120;
+    this.h = 14;
+    this.x = (baseWidth - this.w) / 2;
+    this.y = baseHeight - 40;
+    this.speed = 7;
+    this.vx = 0;
+    this.color = "#38bdf8";
   }
-  draw(){ ctx.fillStyle="#fde68a"; ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fill(); }
-}
-class Brick {
-  constructor(x,y,w,h,hp,color){ this.x=x; this.y=y; this.w=w; this.h=h; this.hp=hp; this.color=color; }
-  hit(){ this.hp--; }
-  draw(){ ctx.fillStyle=this.color; ctx.fillRect(this.x,this.y,this.w,this.h); if(this.hp>1){ctx.fillStyle="#fff"; ctx.font="12px monospace"; ctx.fillText(this.hp,this.x+6,this.y+16);} }
+  update() {
+    this.x += this.vx;
+    if (this.x < 0) this.x = 0;
+    if (this.x + this.w > baseWidth) this.x = baseWidth - this.w;
+  }
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(scaleX(this.x), scaleY(this.y), scaleX(this.w), scaleY(this.h));
+  }
 }
 
-// ----- Helper Functions -----
-function buildLevel(level){
-  const bricks=[]; 
-  const rows=Math.min(6,3+Math.floor(level/1.5)); 
-  const cols=Math.min(12,6+Math.floor(level/2));
-  const brickW=Math.floor((W-80)/cols); 
-  const brickH=22;
-  for(let r=0;r<rows;r++){
-    for(let c=0;c<cols;c++){
-      const x=40+c*brickW+c*4; 
-      const y=60+r*(brickH+6);
-      const hp=1+Math.floor((r+level-1)/4);
-      const hue=200-r*10-(level%10); 
-      const color=`hsl(${hue}deg 75% 50%)`;
-      bricks.push(new Brick(x,y,brickW,brickH,hp,color));
+class Ball {
+  constructor(x, y, dx, dy) {
+    this.r = 8;
+    this.x = x;
+    this.y = y;
+    this.dx = dx;
+    this.dy = dy;
+    this.sticky = true;
+  }
+  update() {
+    if (this.sticky) {
+      this.x = state.paddle.x + state.paddle.w / 2;
+      this.y = state.paddle.y - 16;
+      return;
+    }
+    this.x += this.dx;
+    this.y += this.dy;
+    if (this.x - this.r < 0 || this.x + this.r > baseWidth) this.dx *= -1;
+    if (this.y - this.r < 0) this.dy *= -1;
+  }
+  draw() {
+    ctx.fillStyle = "#fde68a";
+    ctx.beginPath();
+    ctx.arc(scaleX(this.x), scaleY(this.y), scaleX(this.r), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+class Brick {
+  constructor(x, y, w, h, hp, color) {
+    this.x = x;
+    this.y = y;
+    this.w = w;
+    this.h = h;
+    this.hp = hp;
+    this.color = color;
+  }
+  hit() { this.hp--; }
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(scaleX(this.x), scaleY(this.y), scaleX(this.w), scaleY(this.h));
+  }
+}
+
+// ===== Helpers =====
+function buildLevel(level) {
+  const bricks = [];
+  const rows = Math.min(6, 3 + Math.floor(level / 1.5));
+  const cols = Math.min(12, 6 + Math.floor(level / 2));
+  const brickW = Math.floor((baseWidth - 80) / cols);
+  const brickH = 22;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = 40 + c * brickW + c * 4;
+      const y = 60 + r * (brickH + 6);
+      const hp = 1 + Math.floor((r + level - 1) / 4);
+      const hue = 200 - r * 10 - (level % 10);
+      const color = `hsl(${hue}deg 75% 50%)`;
+      bricks.push(new Brick(x, y, brickW, brickH, hp, color));
     }
   }
   return bricks;
 }
-function resetBoard(full=false){
-  state.paddle=new Paddle();
-  state.balls=[new Ball(W/2,state.paddle.y-16,Math.random()*4-2,-4)];
-  state.balls[0].sticky=true;
-  if(full){ state.score=0; state.lives=3; state.level=1; }
-  state.bricks=buildLevel(state.level);
+
+function resetBoard(full = false) {
+  state.paddle = new Paddle();
+  state.balls = [new Ball(baseWidth / 2, state.paddle.y - 16, Math.random() * 4 - 2, -4)];
+  if (full) {
+    state.score = 0;
+    state.lives = 3;
+    state.level = 1;
+  }
+  state.bricks = buildLevel(state.level);
   updateHUD();
 }
-function updateHUD(){ scoreEl.textContent=state.score; livesEl.textContent=state.lives; levelEl.textContent=state.level; }
-function rectCircleCollide(rect,circle){
-  const dx=Math.max(rect.x,Math.min(circle.x,rect.x+rect.w));
-  const dy=Math.max(rect.y,Math.min(circle.y,rect.y+rect.h));
-  return Math.hypot(circle.x-dx,circle.y-dy)<circle.r;
+
+function updateHUD() {
+  scoreEl.textContent = state.score;
+  livesEl.textContent = state.lives;
+  levelEl.textContent = state.level;
 }
 
-// ----- Game Loop -----
-function step(){
-  if(!state.running)return;
+function rectCircleCollide(rect, circle) {
+  const dx = Math.max(rect.x, Math.min(circle.x, rect.x + rect.w));
+  const dy = Math.max(rect.y, Math.min(circle.y, rect.y + rect.h));
+  return Math.hypot(circle.x - dx, circle.y - dy) < circle.r;
+}
+
+// ===== Game Loop =====
+function step() {
+  if (!state.running) return;
   state.paddle.update();
-  for(const b of state.balls)b.update();
-  for(const b of state.balls){
-    if(rectCircleCollide(state.paddle,b)){ b.dy=-Math.abs(b.dy); b.sticky=false; }
+  state.balls.forEach(b => b.update());
+
+  // Paddle collision
+  state.balls.forEach(b => {
+    if (rectCircleCollide(state.paddle, b)) {
+      b.dy = -Math.abs(b.dy);
+      b.sticky = false;
+    }
+  });
+
+  // Brick collision
+  state.bricks.forEach(br => {
+    state.balls.forEach(b => {
+      if (rectCircleCollide(br, b)) {
+        br.hit();
+        b.dy *= -1;
+        state.score += 10;
+      }
+    });
+  });
+  state.bricks = state.bricks.filter(br => br.hp > 0);
+
+  // Lose ball
+  state.balls = state.balls.filter(b => b.y - b.r < baseHeight);
+  if (state.balls.length === 0) {
+    state.lives--;
+    if (state.lives <= 0) {
+      gameOver();
+      return;
+    }
+    state.balls = [new Ball(baseWidth / 2, state.paddle.y - 16, Math.random() * 4 - 2, -4)];
   }
-  state.bricks.forEach(br=>state.balls.forEach(b=>{
-    if(rectCircleCollide(br,b)){ br.hit(); b.dy*=-1; state.score+=10; }
-  }));
-  state.bricks=state.bricks.filter(br=>br.hp>0);
-  state.balls=state.balls.filter(b=>b.y-b.r<H);
-  if(state.balls.length===0){
-    state.lives--; 
-    if(state.lives<=0){ gameOver(); return; }
-    state.balls=[new Ball(W/2,state.paddle.y-16,Math.random()*4-2,-4)];
-    state.balls[0].sticky=true;
-  }
-  if(state.bricks.length===0){
+
+  // Next level
+  if (state.bricks.length === 0) {
     state.level++;
-    state.bricks=buildLevel(state.level);
-    state.balls=[new Ball(W/2,state.paddle.y-16,Math.random()*4-2,-4)];
-    state.balls[0].sticky=true;
+    state.bricks = buildLevel(state.level);
+    state.balls = [new Ball(baseWidth / 2, state.paddle.y - 16, Math.random() * 4 - 2, -4)];
   }
+
   render();
   updateHUD();
   requestAnimationFrame(step);
 }
-function render(){
-  ctx.clearRect(0,0,W,H);
-  state.bricks.forEach(br=>br.draw());
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  state.bricks.forEach(br => br.draw());
   state.paddle.draw();
-  state.balls.forEach(b=>b.draw());
+  state.balls.forEach(b => b.draw());
 }
 
-// ----- Game Over -----
-async function gameOver(){
-  state.running=false;
+// ===== Game Over =====
+function gameOver() {
+  state.running = false;
   render();
-  ctx.fillStyle="rgba(0,0,0,0.6)";
-  ctx.fillRect(0,0,W,H);
-  ctx.fillStyle="#fff";
-  ctx.font="32px sans-serif";
-  ctx.fillText("Game Over", W/2-90, H/2-10);
-  const name = prompt("Game Over! Enter your name:","Player");
-  if(name){
-    await saveScore(name,state.score);
-    await updateLeaderboardDisplay();
-  }
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff";
+  ctx.font = `${scaleX(28)}px sans-serif`;
+  ctx.fillText("Game Over", canvas.width / 2 - 80, canvas.height / 2);
 }
 
-// ----- Keyboard Controls -----
-document.addEventListener("keydown", e=>{
-  if(e.key==="ArrowLeft"||e.key==="a") state.paddle.vx=-state.paddle.speed;
-  if(e.key==="ArrowRight"||e.key==="d") state.paddle.vx=state.paddle.speed;
-  if(e.key===" "){ state.balls.forEach(b=>b.sticky=false); }
+// ===== Controls =====
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowLeft" || e.key === "a") state.paddle.vx = -state.paddle.speed;
+  if (e.key === "ArrowRight" || e.key === "d") state.paddle.vx = state.paddle.speed;
+  if (e.key === " ") state.balls.forEach(b => b.sticky = false);
 });
-document.addEventListener("keyup", e=>{
-  if(e.key==="ArrowLeft"||e.key==="a"||e.key==="ArrowRight"||e.key==="d") state.paddle.vx=0;
+document.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft" || e.key === "a" || e.key === "ArrowRight" || e.key === "d") state.paddle.vx = 0;
 });
 
-// ----- Mobile Touch Controls -----
-const leftBtn=document.getElementById("leftBtn");
-const rightBtn=document.getElementById("rightBtn");
-const launchBtn=document.getElementById("launchBtn");
+// ===== Buttons =====
+document.getElementById("start").addEventListener("click", () => {
+  if (!state.running) {
+    state.running = true;
+    requestAnimationFrame(step);
+  }
+});
+document.getElementById("restart").addEventListener("click", () => {
+  resetBoard(true);
+  state.running = true;
+  requestAnimationFrame(step);
+});
 
-leftBtn.addEventListener("touchstart", ()=> state.paddle.vx=-state.paddle.speed);
-leftBtn.addEventListener("touchend", ()=> state.paddle.vx=0);
-rightBtn.addEventListener("touchstart", ()=> state.paddle.vx=state.paddle.speed);
-rightBtn.addEventListener("touchend", ()=> state.paddle.vx=0);
-launchBtn.addEventListener("touchstart", ()=> state.balls.forEach(b=>b.sticky=false));
-
-// ----- Buttons -----
-document.getElementById("start").addEventListener("click", ()=>{ if(!state.running){ state.running=true; requestAnimationFrame(step); } });
-document.getElementById("restart").addEventListener("click", ()=>{ resetBoard(true); state.running=true; requestAnimationFrame(step); });
-
-// ----- Initialize -----
+// ===== Init =====
 resetBoard(true);
-updateLeaderboardDisplay();
 </script>
 </body>
 </html>
