@@ -36,7 +36,7 @@ header {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 6px;
-  font-size: 0.9rem;
+  flex-wrap: wrap;
 }
 
 canvas {
@@ -55,19 +55,25 @@ button {
   cursor: pointer;
   background: var(--accent);
   color: #042939;
-  margin-left: 5px;
+  margin: 5px;
 }
 
-#leaderboard {
-  width: 100%;
+/* Mobile touch controls */
+#controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
   margin-top: 10px;
-  background: #0b1a2c;
-  padding: 10px;
-  border-radius: 8px;
+  width: 100%;
 }
-
-#leaderboard ol {
-  padding-left: 20px;
+#controls button {
+  flex: 1;
+  padding: 16px;
+  font-size: 22px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #042939;
+  border: none;
 }
 </style>
 </head>
@@ -87,6 +93,13 @@ button {
 
   <canvas id="game"></canvas>
 
+  <!-- Touch controls for mobile -->
+  <div id="controls">
+    <button id="leftBtn">◀️</button>
+    <button id="launchBtn">⏺️</button>
+    <button id="rightBtn">▶️</button>
+  </div>
+
   <div id="leaderboard">
     <h2>Leaderboard</h2>
     <ol id="leaderList"></ol>
@@ -97,8 +110,6 @@ button {
 // ===== Responsive Canvas Setup =====
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-
-// Base resolution (design space)
 const baseWidth = 800;
 const baseHeight = 500;
 
@@ -305,6 +316,7 @@ function gameOver() {
 }
 
 // ===== Controls =====
+// Keyboard
 document.addEventListener("keydown", e => {
   if (e.key === "ArrowLeft" || e.key === "a") state.paddle.vx = -state.paddle.speed;
   if (e.key === "ArrowRight" || e.key === "d") state.paddle.vx = state.paddle.speed;
@@ -314,7 +326,20 @@ document.addEventListener("keyup", e => {
   if (e.key === "ArrowLeft" || e.key === "a" || e.key === "ArrowRight" || e.key === "d") state.paddle.vx = 0;
 });
 
-// ===== Buttons =====
+// Touch Buttons
+const leftBtn = document.getElementById("leftBtn");
+const rightBtn = document.getElementById("rightBtn");
+const launchBtn = document.getElementById("launchBtn");
+
+leftBtn.addEventListener("touchstart", () => state.paddle.vx = -state.paddle.speed);
+leftBtn.addEventListener("touchend", () => state.paddle.vx = 0);
+
+rightBtn.addEventListener("touchstart", () => state.paddle.vx = state.paddle.speed);
+rightBtn.addEventListener("touchend", () => state.paddle.vx = 0);
+
+launchBtn.addEventListener("touchstart", () => state.balls.forEach(b => b.sticky = false));
+
+// Buttons
 document.getElementById("start").addEventListener("click", () => {
   if (!state.running) {
     state.running = true;
@@ -327,7 +352,7 @@ document.getElementById("restart").addEventListener("click", () => {
   requestAnimationFrame(step);
 });
 
-// ===== Init =====
+// Initialize
 resetBoard(true);
 </script>
 </body>
